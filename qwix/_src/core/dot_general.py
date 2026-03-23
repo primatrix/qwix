@@ -29,6 +29,7 @@ def get_how_to_quantize(
     ndims: tuple[int, int],
     for_lhs: bool,
     tile_size: int | float | None,
+    channelwise_tile_size: int | None = None,
     **kwargs: Any,
 ) -> qarray.HowToQuantize:
   """Get how to quantize from dimension_numbers and remaining_dims.
@@ -41,6 +42,7 @@ def get_how_to_quantize(
     ndims: The number of dimensions for lhs and rhs.
     for_lhs: Whether to quantize lhs or rhs.
     tile_size: The tile size for subchannel quantization.
+    channelwise_tile_size: The tile size for channelwise axes.
     **kwargs: Additional keyword arguments to HowToQuantize.
 
   Returns:
@@ -53,7 +55,12 @@ def get_how_to_quantize(
     ndim = ndims[1]
     contracting_axes = dimension_numbers[0][1]
 
-  channelwise_axes = sorted(set(range(ndim)) - set(contracting_axes))
+  batch_axes = set(
+      dimension_numbers[1][0] if for_lhs else dimension_numbers[1][1]
+  )
+  channelwise_axes = sorted(
+      set(range(ndim)) - set(contracting_axes) - batch_axes
+  )
   tiled_axes = {}
   if tile_size:
     tiled_axes = {contracting_axes[0]: tile_size}
@@ -61,6 +68,7 @@ def get_how_to_quantize(
   return qarray.HowToQuantize(
       channelwise_axes=channelwise_axes,
       tiled_axes=tiled_axes,
+      channelwise_tile_size=channelwise_tile_size,
       **kwargs,
   )
 
@@ -421,6 +429,21 @@ def dot_general(
   # We need to choose between slow_dot_general, which dequantizes first and
   # then computes in floating-point types, and fast_dot_general, which
   # computes in quantized types first and then dequantize.
+
+  # Force slow path when non-contraction axes have tiling
+  # (channelwise_tile_size). _fast_dot_general assumes tiled axes are
+  # contraction-only.
+  for operand, ca in zip((lhs, rhs), dimension_numbers[0]):
+    if isinstance(operand, qarray.QArray):
+      tiled = qarray.get_tiled_axes(operand)
+      if any(ax not in ca for ax in tiled if tiled[ax] > 1):
+        return _slow_dot_general(
+            lhs, rhs, dimension_numbers,
+            precision=precision,
+            preferred_element_type=preferred_element_type,
+            **kwargs,
+        )
+
   use_fast_dot_general = True
   for operand, ca in zip((lhs, rhs), dimension_numbers[0]):
     if not isinstance(operand, qarray.QArray):

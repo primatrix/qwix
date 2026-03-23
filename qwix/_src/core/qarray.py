@@ -297,6 +297,10 @@ class HowToQuantize:
   tiled_axes: Mapping[int, int | float] = dataclasses.field(
       default_factory=dict
   )
+  # If set, enable 2D block-wise quantization along the channelwise axis with
+  # the given tile size. This tiles each channelwise axis into blocks of
+  # channelwise_tile_size, producing a 2D grid of scales.
+  channelwise_tile_size: int | None = None
   # The calibration method to use. The format is <method>[,<args>], e.g.
   # "absmax" or "fixed,-10,10". Check calibrate() for supported methods.
   calibration_method: str = 'absmax'
@@ -318,7 +322,15 @@ def get_scale_shape(array_shape: ShapeT, how: HowToQuantize) -> ShapeT:
   scale_shape = []
   for axis, dim in enumerate(array_shape):
     if axis in how.channelwise_axes:
-      scale_shape.append(dim)
+      if how.channelwise_tile_size is not None:
+        if dim % how.channelwise_tile_size != 0:
+          raise ValueError(
+              f'Axis {axis} size {dim} not divisible by'
+              f' channelwise_tile_size {how.channelwise_tile_size}'
+          )
+        scale_shape.append(dim // how.channelwise_tile_size)
+      else:
+        scale_shape.append(dim)
     elif axis in how.tiled_axes:
       tile_size = how.tiled_axes[axis]
       if isinstance(tile_size, float):
@@ -473,18 +485,27 @@ def calibrate(array: jax.Array, how: HowToQuantize) -> dict[str, jax.Array]:
         channelwise_axes=list(range(last_axis)),
         tiled_axes={last_axis: 32},
     )
+
+  # Build effective tiled_axes that includes channelwise tiling.
+  effective_tiled_axes = dict(how.tiled_axes)
+  if how.channelwise_tile_size is not None:
+    if set(how.channelwise_axes) & how.tiled_axes.keys():
+      raise ValueError('The same axis cannot be both channelwise and tiled.')
+    for ax in how.channelwise_axes:
+      effective_tiled_axes[ax] = how.channelwise_tile_size
+
   reduce_axes = []  # axes to calibrate.
   tiled_axes_offset = 0
   for axis, _ in enumerate(array.shape):
-    if axis in how.channelwise_axes:
-      continue  # no reduce needed.
-    if axis in how.tiled_axes:
+    if axis in how.channelwise_axes and how.channelwise_tile_size is None:
+      continue  # original channelwise: no reduce needed.
+    if axis in effective_tiled_axes:
       tiled_axes_offset += 1  # reduce the tile_size rather than num_tiles.
     reduce_axes.append(axis + tiled_axes_offset)
 
   # The returned calibration values should have the same shape as the scale.
   shape = get_scale_shape(array.shape, how)
-  array = split_axis(array, how.tiled_axes)
+  array = split_axis(array, effective_tiled_axes)
 
   # Parse the calibration method.
   method, *args = how.calibration_method.lower().split(',')

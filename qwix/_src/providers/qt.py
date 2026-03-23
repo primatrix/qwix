@@ -45,6 +45,10 @@ class QtRule(qconfig.QuantizationRule):
   # the incoming gradient and the residual activation rather than any "weight".
   bwd_weight_grad_tile_size: int | float | None = None
 
+  # In backward pass, enable 2D block-wise quantization along the channelwise
+  # axis when calculating the gradient of weights.
+  bwd_channelwise_tile_size: int | None = None
+
   # If True, disable channelwise axes for both forward and backward passes.
   disable_channelwise_axes: bool = False
 
@@ -349,6 +353,22 @@ class QtProvider(qconfig.QuantizationProvider):
     drhs_tile_size = None
     bwd_stochastic_rounding_noise_fn = None
 
+    # Forward: channelwise_tile_size for weight only.
+    lhs_channelwise_tile_size = (
+        rule.channelwise_tile_size if lhs_is_weight else None
+    )
+    rhs_channelwise_tile_size = (
+        rule.channelwise_tile_size if rhs_is_weight else None
+    )
+
+    # Backward: bwd_channelwise_tile_size for weight grad only.
+    dlhs_channelwise_tile_size = (
+        rule.bwd_channelwise_tile_size if lhs_is_weight else None
+    )
+    drhs_channelwise_tile_size = (
+        rule.bwd_channelwise_tile_size if rhs_is_weight else None
+    )
+
     if rule.bwd_qtype is not None:
       if lhs_is_weight:
         dlhs_tile_size = rule.bwd_weight_grad_tile_size
@@ -366,6 +386,8 @@ class QtProvider(qconfig.QuantizationProvider):
         lhs_qtype=lhs_qtype,
         rhs_qtype=rhs_qtype,
         tile_size=rule.tile_size,
+        lhs_channelwise_tile_size=lhs_channelwise_tile_size,
+        rhs_channelwise_tile_size=rhs_channelwise_tile_size,
         lhs_calibration_method=lhs_calibration_method,
         rhs_calibration_method=rhs_calibration_method,
         lhs_collect_quant_stat=lhs_collect_quant_stat,
@@ -376,12 +398,14 @@ class QtProvider(qconfig.QuantizationProvider):
         dlhs_grad_qtype=rule.bwd_qtype,
         dlhs_grad_calibration_method=rule.bwd_calibration_method,
         dlhs_tile_size=dlhs_tile_size,
+        dlhs_channelwise_tile_size=dlhs_channelwise_tile_size,
         dlhs_stochastic_rounding_noise_fn=bwd_stochastic_rounding_noise_fn,
         dlhs_grad_disable_channelwise_axes=rule.disable_channelwise_axes,
         # drhs configs.
         drhs_grad_qtype=rule.bwd_qtype,
         drhs_grad_calibration_method=rule.bwd_calibration_method,
         drhs_tile_size=drhs_tile_size,
+        drhs_channelwise_tile_size=drhs_channelwise_tile_size,
         drhs_stochastic_rounding_noise_fn=bwd_stochastic_rounding_noise_fn,
         drhs_grad_disable_channelwise_axes=rule.disable_channelwise_axes,
     )
