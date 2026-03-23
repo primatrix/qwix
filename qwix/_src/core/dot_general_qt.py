@@ -199,6 +199,7 @@ def dot_general_qt_bwd(
     if for_dlhs:
       g_qtype = config.dlhs_grad_qtype
       g_tile_size = config.dlhs_tile_size
+      g_channelwise_tile_size = config.dlhs_channelwise_tile_size
       g_calibration_method = config.dlhs_grad_calibration_method
       g_noise_fn = config.dlhs_stochastic_rounding_noise_fn
       g_disable_channelwise_axes = config.dlhs_grad_disable_channelwise_axes
@@ -209,6 +210,7 @@ def dot_general_qt_bwd(
     else:
       g_qtype = config.drhs_grad_qtype
       g_tile_size = config.drhs_tile_size
+      g_channelwise_tile_size = config.drhs_channelwise_tile_size
       g_calibration_method = config.drhs_grad_calibration_method
       g_noise_fn = config.drhs_stochastic_rounding_noise_fn
       g_disable_channelwise_axes = config.drhs_grad_disable_channelwise_axes
@@ -233,6 +235,7 @@ def dot_general_qt_bwd(
           for_lhs=True,
           qtype=g_qtype,
           tile_size=g_tile_size,
+          channelwise_tile_size=g_channelwise_tile_size,
           calibration_method=g_calibration_method,
           noise_fn=g_noise_fn,
       )
@@ -313,6 +316,7 @@ def dot_general_qt(
         for_lhs=True,
         qtype=config.lhs_qtype,
         tile_size=config.tile_size,
+        channelwise_tile_size=config.lhs_channelwise_tile_size,
         calibration_method=config.lhs_calibration_method,
     )
     if config.lhs_disable_channelwise_axes:
@@ -328,6 +332,7 @@ def dot_general_qt(
         for_lhs=False,
         qtype=config.rhs_qtype,
         tile_size=config.tile_size,
+        channelwise_tile_size=config.rhs_channelwise_tile_size,
         calibration_method=config.rhs_calibration_method,
     )
     if config.rhs_disable_channelwise_axes:

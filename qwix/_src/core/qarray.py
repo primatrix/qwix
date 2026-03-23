@@ -322,7 +322,15 @@ def get_scale_shape(array_shape: ShapeT, how: HowToQuantize) -> ShapeT:
   scale_shape = []
   for axis, dim in enumerate(array_shape):
     if axis in how.channelwise_axes:
-      scale_shape.append(dim)
+      if how.channelwise_tile_size is not None:
+        if dim % how.channelwise_tile_size != 0:
+          raise ValueError(
+              f'Axis {axis} size {dim} not divisible by'
+              f' channelwise_tile_size {how.channelwise_tile_size}'
+          )
+        scale_shape.append(dim // how.channelwise_tile_size)
+      else:
+        scale_shape.append(dim)
     elif axis in how.tiled_axes:
       tile_size = how.tiled_axes[axis]
       if isinstance(tile_size, float):
@@ -477,18 +485,25 @@ def calibrate(array: jax.Array, how: HowToQuantize) -> dict[str, jax.Array]:
         channelwise_axes=list(range(last_axis)),
         tiled_axes={last_axis: 32},
     )
+
+  # Build effective tiled_axes that includes channelwise tiling.
+  effective_tiled_axes = dict(how.tiled_axes)
+  if how.channelwise_tile_size is not None:
+    for ax in how.channelwise_axes:
+      effective_tiled_axes[ax] = how.channelwise_tile_size
+
   reduce_axes = []  # axes to calibrate.
   tiled_axes_offset = 0
   for axis, _ in enumerate(array.shape):
-    if axis in how.channelwise_axes:
-      continue  # no reduce needed.
-    if axis in how.tiled_axes:
+    if axis in how.channelwise_axes and how.channelwise_tile_size is None:
+      continue  # original channelwise: no reduce needed.
+    if axis in effective_tiled_axes:
       tiled_axes_offset += 1  # reduce the tile_size rather than num_tiles.
     reduce_axes.append(axis + tiled_axes_offset)
 
   # The returned calibration values should have the same shape as the scale.
   shape = get_scale_shape(array.shape, how)
-  array = split_axis(array, how.tiled_axes)
+  array = split_axis(array, effective_tiled_axes)
 
   # Parse the calibration method.
   method, *args = how.calibration_method.lower().split(',')
@@ -621,6 +636,20 @@ def quantize(array: jax.Array, how: HowToQuantize) -> QArray:
   if how.sparsity_rule is not None:
     array = sparsify(array, how.sparsity_rule)
   calibration = calibrate(array, how)
+  if how.channelwise_tile_size is not None:
+    # For 2D block-wise quantization, compute and keep the scale in float32
+    # for better precision. This matches the DeepSeek-V3 convention of using
+    # float32 block scales with FP8.
+    calibration = {k: v.astype(jnp.float32) for k, v in calibration.items()}
+    scale, zero_point = compute_scale_zero_point(calibration, how.qtype)
+    # Perform quantization in float32 for better rounding.
+    qvalue = call_with_generic_broadcast(jnp.divide, array, scale)
+    if zero_point is not None:
+      qvalue = call_with_generic_broadcast(
+          jnp.add, qvalue, zero_point.astype(qvalue.dtype)
+      )
+    qvalue = numerics.convert_to(qvalue, how.qtype, how.noise_fn)
+    return QArray(qvalue, scale, zero_point, how.qtype)
   scale, zero_point = compute_scale_zero_point(calibration, how.qtype)
   return quantize_with_scale_zero_point(
       array, how.qtype, scale, zero_point, how.noise_fn
