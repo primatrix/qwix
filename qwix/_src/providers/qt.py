@@ -45,6 +45,10 @@ class QtRule(qconfig.QuantizationRule):
   # the incoming gradient and the residual activation rather than any "weight".
   bwd_weight_grad_tile_size: int | float | None = None
 
+  # In backward pass, enable 2D block-wise quantization along the channelwise
+  # axis when calculating the gradient of weights.
+  bwd_channelwise_tile_size: int | None = None
+
   # If True, disable channelwise axes for both forward and backward passes.
   disable_channelwise_axes: bool = False
 

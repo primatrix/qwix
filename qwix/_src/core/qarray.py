@@ -297,6 +297,10 @@ class HowToQuantize:
   tiled_axes: Mapping[int, int | float] = dataclasses.field(
       default_factory=dict
   )
+  # If set, enable 2D block-wise quantization along the channelwise axis with
+  # the given tile size. This tiles each channelwise axis into blocks of
+  # channelwise_tile_size, producing a 2D grid of scales.
+  channelwise_tile_size: int | None = None
   # The calibration method to use. The format is <method>[,<args>], e.g.
   # "absmax" or "fixed,-10,10". Check calibrate() for supported methods.
   calibration_method: str = 'absmax'

@@ -58,6 +58,10 @@ class QuantizationRule:
   # be round(axis_size * tile_size).
   tile_size: int | float | None = None
 
+  # If set, enable 2D block-wise quantization along the channelwise axis with
+  # the given tile size, producing a 2D grid of scales instead of a 1D vector.
+  channelwise_tile_size: int | None = None
+
   # If set, enable static-range quantization for input activations. Quantization
   # statistics for the input activations are collected and will appear in the
   # Flax collection "quant_stats". This requires act_qtype to be set.

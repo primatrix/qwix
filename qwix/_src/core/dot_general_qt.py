@@ -34,6 +34,8 @@ class DotGeneralQtConfig:
   lhs_qtype: jax.typing.DTypeLike | None = None
   rhs_qtype: jax.typing.DTypeLike | None = None
   tile_size: int | float | None = None
+  lhs_channelwise_tile_size: int | None = None
+  rhs_channelwise_tile_size: int | None = None
   lhs_calibration_method: str = 'absmax'
   rhs_calibration_method: str = 'absmax'
   lhs_collect_quant_stat: Callable[[Any], Any] | None = None
@@ -45,6 +47,7 @@ class DotGeneralQtConfig:
   dlhs_grad_qtype: jax.typing.DTypeLike | None = None  # incoming gradient
   dlhs_grad_calibration_method: str = 'absmax'
   dlhs_tile_size: int | float | None = None
+  dlhs_channelwise_tile_size: int | None = None
   dlhs_stochastic_rounding_noise_fn: numerics.NoiseFn | None = None
   dlhs_grad_disable_channelwise_axes: bool = False
 
@@ -52,6 +55,7 @@ class DotGeneralQtConfig:
   drhs_grad_qtype: jax.typing.DTypeLike | None = None  # incoming gradient
   drhs_grad_calibration_method: str = 'absmax'
   drhs_tile_size: int | float | None = None
+  drhs_channelwise_tile_size: int | None = None
   drhs_stochastic_rounding_noise_fn: numerics.NoiseFn | None = None
   drhs_grad_disable_channelwise_axes: bool = False
 
