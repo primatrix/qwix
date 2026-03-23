@@ -55,7 +55,12 @@ def get_how_to_quantize(
     ndim = ndims[1]
     contracting_axes = dimension_numbers[0][1]
 
-  channelwise_axes = sorted(set(range(ndim)) - set(contracting_axes))
+  batch_axes = set(
+      dimension_numbers[1][0] if for_lhs else dimension_numbers[1][1]
+  )
+  channelwise_axes = sorted(
+      set(range(ndim)) - set(contracting_axes) - batch_axes
+  )
   tiled_axes = {}
   if tile_size:
     tiled_axes = {contracting_axes[0]: tile_size}

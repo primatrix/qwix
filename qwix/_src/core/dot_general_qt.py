@@ -255,6 +255,7 @@ def dot_general_qt_bwd(
           for_lhs=False,
           qtype=y_qtype,
           tile_size=g_tile_size,
+          channelwise_tile_size=g_channelwise_tile_size,
           calibration_method=y_calibration_method,
       )
       if y_disable_channelwise_axes:

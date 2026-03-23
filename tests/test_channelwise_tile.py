@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import unittest
+from qwix._src.core import dot_general_qt
 from qwix._src.core import qarray
 
 
@@ -94,8 +95,6 @@ class ChannelwiseTileDotGeneralTest(unittest.TestCase):
 
     def test_blockwise_fp8_dot_general(self):
         """Block-wise FP8 dot_general should produce output close to bf16."""
-        from qwix._src.core import dot_general_qt
-
         key = jax.random.PRNGKey(0)
         lhs = jax.random.normal(key, (8, 512), dtype=jnp.bfloat16)
         rhs = jax.random.normal(key, (512, 256), dtype=jnp.bfloat16)
@@ -117,8 +116,6 @@ class ChannelwiseTileDotGeneralTest(unittest.TestCase):
 
     def test_blockwise_fp8_gradient(self):
         """Gradients through block-wise FP8 dot_general should be close to bf16."""
-        from qwix._src.core import dot_general_qt
-
         key = jax.random.PRNGKey(0)
         lhs = jax.random.normal(key, (8, 512), dtype=jnp.bfloat16)
         rhs = jax.random.normal(key, (512, 256), dtype=jnp.bfloat16)
