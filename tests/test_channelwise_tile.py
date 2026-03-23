@@ -51,10 +51,15 @@ class ChannelwiseTileTest(unittest.TestCase):
 
     def test_roundtrip_precision(self):
         """Block-wise FP8 roundtrip should have lower error than per-tensor FP8."""
-        key = jax.random.PRNGKey(42)
+        key1, key2 = jax.random.split(jax.random.PRNGKey(42))
+        # Create tensor with blocks of very different magnitudes.
+        # 4 blocks along axis 0, each with different scale.
+        # Per-tensor scale is dominated by the largest block.
         x = jnp.concatenate([
-            jax.random.normal(key, (128, 128), dtype=jnp.bfloat16) * 100,
-            jax.random.normal(key, (128, 128), dtype=jnp.bfloat16) * 0.01,
+            jax.random.normal(key1, (128, 128), dtype=jnp.bfloat16) * 1000,
+            jax.random.normal(key2, (128, 128), dtype=jnp.bfloat16) * 10,
+            jax.random.normal(key1, (128, 128), dtype=jnp.bfloat16) * 0.1,
+            jax.random.normal(key2, (128, 128), dtype=jnp.bfloat16) * 0.001,
         ], axis=0)
 
         how_block = qarray.HowToQuantize(
@@ -77,8 +82,10 @@ class ChannelwiseTileTest(unittest.TestCase):
         qa_tensor = qarray.quantize(x, how_tensor)
         x_tensor = qarray.dequantize(qa_tensor)
 
-        error_block = jnp.abs(x - x_block).mean()
-        error_tensor = jnp.abs(x - x_tensor).mean()
+        # Compute mean absolute error in float32 to avoid bfloat16 precision loss.
+        x_f32 = x.astype(jnp.float32)
+        error_block = jnp.abs(x_f32 - x_block.astype(jnp.float32)).mean()
+        error_tensor = jnp.abs(x_f32 - x_tensor.astype(jnp.float32)).mean()
         self.assertLess(float(error_block), float(error_tensor))
 
 

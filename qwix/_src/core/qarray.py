@@ -489,6 +489,8 @@ def calibrate(array: jax.Array, how: HowToQuantize) -> dict[str, jax.Array]:
   # Build effective tiled_axes that includes channelwise tiling.
   effective_tiled_axes = dict(how.tiled_axes)
   if how.channelwise_tile_size is not None:
+    if set(how.channelwise_axes) & how.tiled_axes.keys():
+      raise ValueError('The same axis cannot be both channelwise and tiled.')
     for ax in how.channelwise_axes:
       effective_tiled_axes[ax] = how.channelwise_tile_size
 
@@ -636,20 +638,6 @@ def quantize(array: jax.Array, how: HowToQuantize) -> QArray:
   if how.sparsity_rule is not None:
     array = sparsify(array, how.sparsity_rule)
   calibration = calibrate(array, how)
-  if how.channelwise_tile_size is not None:
-    # For 2D block-wise quantization, compute and keep the scale in float32
-    # for better precision. This matches the DeepSeek-V3 convention of using
-    # float32 block scales with FP8.
-    calibration = {k: v.astype(jnp.float32) for k, v in calibration.items()}
-    scale, zero_point = compute_scale_zero_point(calibration, how.qtype)
-    # Perform quantization in float32 for better rounding.
-    qvalue = call_with_generic_broadcast(jnp.divide, array, scale)
-    if zero_point is not None:
-      qvalue = call_with_generic_broadcast(
-          jnp.add, qvalue, zero_point.astype(qvalue.dtype)
-      )
-    qvalue = numerics.convert_to(qvalue, how.qtype, how.noise_fn)
-    return QArray(qvalue, scale, zero_point, how.qtype)
   scale, zero_point = compute_scale_zero_point(calibration, how.qtype)
   return quantize_with_scale_zero_point(
       array, how.qtype, scale, zero_point, how.noise_fn
